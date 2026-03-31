@@ -1,3 +1,24 @@
 # WRG
 
-Wave Roller Gearbox
+_Wave Roller Gearbox_
+
+## Quick Start
+* Run the script on Linux :
+
+```
+./WRG.sh
+```
+
+* Run the script on MS Windows :
+
+```
+WRG.bat
+```
+
+![](img/WRG01.png)
+
+![](img/WRG02.png)
+
+## Ref
+* This code is based on mshndev's code.
+* https://gist.github.com/mshndev/1f52cd55a2f5263530c7625650091d6b
