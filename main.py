@@ -243,7 +243,10 @@ class WaveGearApp:
             msp = doc.modelspace()
 
             cycloid = self.cycloid_points(ecc, roll_r, wave_gen_r, rollers_num, cav_num, res=resolution)
-            msp.add_lwpolyline(cycloid.tolist(), close=True)
+            pts = cycloid.tolist()
+            # 첫 번째 포인트와 마지막 포인트가 동일해야 원활한 폐곡선(B-Spline)이 생성됩니다.
+            spline = msp.add_spline(fit_points=pts)
+            spline.closed = True
 
             sep_width = 2.2 * ecc
             sep_middle_radius = wave_gen_r + roll_r
