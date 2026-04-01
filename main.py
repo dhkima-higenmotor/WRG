@@ -11,7 +11,7 @@ class WaveGearApp:
         self.root = root
         self.root.title("Wave Roller Gear Generator")
         # 제어 패널만 남으므로 창 크기를 작게 조절
-        self.root.geometry("350x400")
+        self.root.geometry("350x800")
 
         # 독립된 플롯 창을 관리하기 위한 변수
         self.plot_window = None
@@ -23,8 +23,9 @@ class WaveGearApp:
         self.roller_diameter_var = tk.DoubleVar(value=3.0)
         self.ecc_var = tk.DoubleVar(value=0.6)
         self.rollers_num_var = tk.IntVar(value=8)
-        self.cycloid_outer_diameter_var = tk.DoubleVar(value=18.0)
+        self.wave_gen_d_var = tk.DoubleVar(value=9.6)
         self.input_shaft_diameter_var = tk.DoubleVar(value=5.0)
+        self.resolution_var = tk.IntVar(value=500)
 
         self.setup_ui()
         self.update_plot()  # 초기 그래프 그리기
@@ -39,8 +40,9 @@ class WaveGearApp:
         self.create_input_field(control_frame, "Roller Diameter (mm):", self.roller_diameter_var)
         self.create_input_field(control_frame, "Eccentricity (ecc) (mm):", self.ecc_var)
         self.create_input_field(control_frame, "Rollers Number:", self.rollers_num_var)
-        self.create_input_field(control_frame, "Cycloid Outer Diameter (mm):", self.cycloid_outer_diameter_var)
+        self.create_input_field(control_frame, "Wave Generator Diameter (mm):", self.wave_gen_d_var)
         self.create_input_field(control_frame, "Input Shaft Diameter (mm):", self.input_shaft_diameter_var)
+        self.create_input_field(control_frame, "Resolution (res):", self.resolution_var)
 
         # Update Graphics 버튼
         update_btn = ttk.Button(control_frame, text="Update Graphics", command=self.update_plot)
@@ -50,13 +52,21 @@ class WaveGearApp:
         export_btn = ttk.Button(control_frame, text="Export DXF", command=self.export_dxf)
         export_btn.pack(pady=5, fill=tk.X)
 
+        # 결과 텍스트 표시
+        self.output_text = tk.Text(control_frame, height=12, font=("Helvetica", 10), state=tk.NORMAL)
+        self.output_text.insert(tk.END, "Waiting for graphics update...")
+        self.output_text.config(state=tk.DISABLED)
+        self.output_text.pack(pady=10, fill=tk.BOTH, expand=True)
+
     def create_input_field(self, parent, label_text, variable):
         frame = ttk.Frame(parent)
         frame.pack(fill=tk.X, pady=5)
         ttk.Label(frame, text=label_text).pack(anchor=tk.W)
         ttk.Entry(frame, textvariable=variable).pack(fill=tk.X)
 
-    def cycloid_points(self, ecc, roll_r, wave_gen_r, rollers_num, cav_num, res=500):
+    def cycloid_points(self, ecc, roll_r, wave_gen_r, rollers_num, cav_num, res=None):
+        if res is None:
+            res = self.resolution_var.get()
         points = []
         for i in range(res):
             theta = (i / res) * 2 * np.pi
@@ -97,8 +107,9 @@ class WaveGearApp:
             roller_diameter = self.roller_diameter_var.get()
             ecc = self.ecc_var.get()
             rollers_num = self.rollers_num_var.get()
-            cycloid_outer_diameter = self.cycloid_outer_diameter_var.get()
+            wave_gen_r_input = self.wave_gen_d_var.get() / 2.0
             input_shaft_diameter = self.input_shaft_diameter_var.get()
+            resolution = self.resolution_var.get()
         except tk.TclError:
             messagebox.showerror("Error", "The input value is incorrect.")
             return
@@ -132,27 +143,50 @@ class WaveGearApp:
         # 2. 기어 계산 로직
         cav_num = rollers_num + 1
         cy_r_min = (1.1 * roller_diameter) / np.sin(np.pi / cav_num) + 2 * ecc
-        cy_r = max(cycloid_outer_diameter / 2, cy_r_min)
-        wave_gen_r = (cy_r - 2 * ecc) - roller_diameter
-        roll_r = roller_diameter / 2
+        wave_gen_r_min = float((cy_r_min - 2 * ecc) - roller_diameter)
+        wave_gen_r = float(max(wave_gen_r_input, wave_gen_r_min))
+        cy_r = float(wave_gen_r + 2 * ecc + roller_diameter)
+        roll_r = float(roller_diameter / 2)
 
         # 3. 그래프 그리기
         self.ax.set_aspect('equal')
         limit = cy_r + (roller_diameter * 2)
         self.ax.set_xlim(-limit, limit)
         self.ax.set_ylim(-limit, limit)
-        self.ax.set_title("WRG V1.0")
+        self.ax.set_title("[WRG] Wave Roller Gearbox")
         
         # 그리드 추가 (점선, 반투명)
         self.ax.grid(True, linestyle='--', alpha=0.6)
 
-        cycloid = self.cycloid_points(ecc, roll_r, wave_gen_r, rollers_num, cav_num)
+        cycloid = self.cycloid_points(ecc, roll_r, wave_gen_r, rollers_num, cav_num, res=resolution)
         self.ax.plot(cycloid[:, 0], cycloid[:, 1], label='Cycloidal Ring Gear', color='blue')
 
         sep_width = 2.2 * ecc
         sep_middle_radius = wave_gen_r + roll_r
         sep_outer_radius = sep_middle_radius + sep_width / 2
         sep_inner_radius = sep_middle_radius - sep_width / 2
+
+        info_str = (
+            f"--- Input Parameters ---\n"
+            f"Roller Diameter: {roller_diameter:.2f} mm\n"
+            f"Eccentricity: {ecc:.2f} mm\n"
+            f"Rollers Number: {rollers_num}\n"
+            f"Wave Gen Diameter: {wave_gen_r_input*2:.2f} mm\n"
+            f"Input Shaft Diameter: {input_shaft_diameter:.2f} mm\n"
+            f"Resolution: {resolution}\n\n"
+            f"--- Calculated Dimensions ---\n"
+            f"Ring Gear Outer Diameter: {cy_r * 2:.2f} mm\n"
+            f"Separator Inner Diameter: {sep_inner_radius * 2:.2f} mm\n"
+            f"Separator Outer Diameter: {sep_outer_radius * 2:.2f} mm\n\n"
+            f"--- Kinematics ---\n"
+            f"Reduction Ratio (Ring fixed): 1/{rollers_num} (Reverse)\n"
+            f"Reduction Ratio (Separator fixed): 1/{cav_num} (Forward)"
+        )
+        self.output_text.config(state=tk.NORMAL)
+        self.output_text.delete(1.0, tk.END)
+        self.output_text.insert(tk.END, info_str)
+        self.output_text.config(state=tk.DISABLED)
+
         self.draw_circle((0, 0), sep_outer_radius, fill=False, linestyle='--', color='green', label='Separator')
         self.draw_circle((0, 0), sep_inner_radius, fill=False, linestyle='--', color='green')
 
@@ -160,7 +194,10 @@ class WaveGearApp:
         self.draw_circle((0, ecc), wave_gen_r, fill=False, linestyle='-.', color='red', label='Wave Generator')
         self.draw_circle((0, 0), input_shaft_diameter / 2, fill=False, color='purple', linestyle=':', label='Input Shaft')
 
-        self.ax.legend(loc='upper right', bbox_to_anchor=(1.15, 1.05))
+        self.ax.legend(loc='upper right')
+
+        # 플롯 여백 최소화
+        self.fig.tight_layout()
 
         # 캔버스 렌더링 업데이트
         self.canvas.draw()
@@ -187,23 +224,25 @@ class WaveGearApp:
             roller_diameter = self.roller_diameter_var.get()
             ecc = self.ecc_var.get()
             rollers_num = self.rollers_num_var.get()
-            cycloid_outer_diameter = self.cycloid_outer_diameter_var.get()
+            wave_gen_r_input = self.wave_gen_d_var.get() / 2.0
             input_shaft_diameter = self.input_shaft_diameter_var.get()
+            resolution = self.resolution_var.get()
         except tk.TclError:
             messagebox.showerror("Error", "The input value is incorrect.")
             return
 
         cav_num = rollers_num + 1
         cy_r_min = (1.1 * roller_diameter) / np.sin(np.pi / cav_num) + 2 * ecc
-        cy_r = max(cycloid_outer_diameter / 2, cy_r_min)
-        wave_gen_r = (cy_r - 2 * ecc) - roller_diameter
-        roll_r = roller_diameter / 2
+        wave_gen_r_min = float((cy_r_min - 2 * ecc) - roller_diameter)
+        wave_gen_r = float(max(wave_gen_r_input, wave_gen_r_min))
+        cy_r = float(wave_gen_r + 2 * ecc + roller_diameter)
+        roll_r = float(roller_diameter / 2)
 
         try:
             doc = ezdxf.new('R2010')
             msp = doc.modelspace()
 
-            cycloid = self.cycloid_points(ecc, roll_r, wave_gen_r, rollers_num, cav_num, res=7200)
+            cycloid = self.cycloid_points(ecc, roll_r, wave_gen_r, rollers_num, cav_num, res=resolution)
             msp.add_lwpolyline(cycloid.tolist(), close=True)
 
             sep_width = 2.2 * ecc

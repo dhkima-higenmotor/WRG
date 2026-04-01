@@ -1,2 +1,2 @@
-.venv\Scripts\activate
+REM .venv\Scripts\activate
 uv run main.py
