@@ -10,8 +10,8 @@ class WaveGearApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Wave Roller Gear Generator")
-        # 제어 패널만 남으므로 창 크기를 작게 조절
-        self.root.geometry("350x800")
+        # 좌우 배치를 위해 창 너비를 늘리고 높이를 줄임
+        self.root.geometry("750x500")
 
         # 독립된 플롯 창을 관리하기 위한 변수
         self.plot_window = None
@@ -31,32 +31,44 @@ class WaveGearApp:
         self.update_plot()  # 초기 그래프 그리기
 
     def setup_ui(self):
-        # 컨트롤 패널 UI 구성
-        control_frame = ttk.Frame(self.root, padding="10")
-        control_frame.pack(fill=tk.BOTH, expand=True)
+        # 전체를 감싸는 메인 프레임
+        main_frame = ttk.Frame(self.root, padding="5")
+        main_frame.pack(fill=tk.BOTH, expand=True)
 
-        ttk.Label(control_frame, text="[WRG] Wave Roller Gearbox", font=("Helvetica", 14, "bold")).pack(pady=(0, 20))
+        ttk.Label(main_frame, text="[WRG] Wave Roller Gearbox", font=("Helvetica", 14, "bold")).pack(pady=(0, 10))
 
-        self.create_input_field(control_frame, "Roller Diameter (mm):", self.roller_diameter_var)
-        self.create_input_field(control_frame, "Eccentricity (ecc) (mm):", self.ecc_var)
-        self.create_input_field(control_frame, "Rollers Number:", self.rollers_num_var)
-        self.create_input_field(control_frame, "Wave Generator Diameter (mm):", self.wave_gen_d_var)
-        self.create_input_field(control_frame, "Input Shaft Diameter (mm):", self.input_shaft_diameter_var)
-        self.create_input_field(control_frame, "Resolution (res):", self.resolution_var)
+        # 좌측 컨트롤 패널과 우측 출력 패널을 나눌 컨테이너
+        content_frame = ttk.Frame(main_frame)
+        content_frame.pack(fill=tk.BOTH, expand=True)
+
+        # 좌측 컨트롤 프레임
+        left_frame = ttk.Frame(content_frame)
+        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+
+        self.create_input_field(left_frame, "Roller Diameter (mm):", self.roller_diameter_var)
+        self.create_input_field(left_frame, "Eccentricity (ecc) (mm):", self.ecc_var)
+        self.create_input_field(left_frame, "Rollers Number:", self.rollers_num_var)
+        self.create_input_field(left_frame, "Expected Wave Generator Diameter (mm):", self.wave_gen_d_var)
+        self.create_input_field(left_frame, "Input Shaft Diameter (mm):", self.input_shaft_diameter_var)
+        self.create_input_field(left_frame, "Resolution (res):", self.resolution_var)
 
         # Update Graphics 버튼
-        update_btn = ttk.Button(control_frame, text="Update Graphics", command=self.update_plot)
+        update_btn = ttk.Button(left_frame, text="Update Graphics", command=self.update_plot)
         update_btn.pack(pady=(20, 5), fill=tk.X)
 
         # Export DXF 버튼
-        export_btn = ttk.Button(control_frame, text="Export DXF", command=self.export_dxf)
+        export_btn = ttk.Button(left_frame, text="Export DXF", command=self.export_dxf)
         export_btn.pack(pady=5, fill=tk.X)
 
+        # 우측 출력 프레임
+        right_frame = ttk.Frame(content_frame)
+        right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
         # 결과 텍스트 표시
-        self.output_text = tk.Text(control_frame, height=12, font=("Helvetica", 10), state=tk.NORMAL)
+        self.output_text = tk.Text(right_frame, width=40, font=("Helvetica", 10), state=tk.NORMAL)
         self.output_text.insert(tk.END, "Waiting for graphics update...")
         self.output_text.config(state=tk.DISABLED)
-        self.output_text.pack(pady=10, fill=tk.BOTH, expand=True)
+        self.output_text.pack(fill=tk.BOTH, expand=True)
 
     def create_input_field(self, parent, label_text, variable):
         frame = ttk.Frame(parent)
@@ -118,7 +130,7 @@ class WaveGearApp:
         if self.plot_window is None or not self.plot_window.winfo_exists():
             self.plot_window = tk.Toplevel(self.root)
             self.plot_window.title("Wave Roller Gear - Plot Window")
-            self.plot_window.geometry("700x750")
+            self.plot_window.geometry("700x700")
 
             # Figure 객체 생성
             self.fig = Figure(figsize=(8, 8))
@@ -166,21 +178,25 @@ class WaveGearApp:
         sep_outer_radius = sep_middle_radius + sep_width / 2
         sep_inner_radius = sep_middle_radius - sep_width / 2
 
+        wave_gen_d_display = f"{wave_gen_r * 2:.2f} [mm]"
+        if wave_gen_r > wave_gen_r_input:
+            wave_gen_d_display += f" adjusted from {wave_gen_r_input * 2:.2f} [mm]"
+
         info_str = (
-            f"--- Input Parameters ---\n"
-            f"Roller Diameter: {roller_diameter:.2f} mm\n"
-            f"Eccentricity: {ecc:.2f} mm\n"
-            f"Rollers Number: {rollers_num}\n"
-            f"Wave Gen Diameter: {wave_gen_r_input*2:.2f} mm\n"
-            f"Input Shaft Diameter: {input_shaft_diameter:.2f} mm\n"
-            f"Resolution: {resolution}\n\n"
-            f"--- Calculated Dimensions ---\n"
-            f"Ring Gear Outer Diameter: {cy_r * 2:.2f} mm\n"
-            f"Separator Inner Diameter: {sep_inner_radius * 2:.2f} mm\n"
-            f"Separator Outer Diameter: {sep_outer_radius * 2:.2f} mm\n\n"
-            f"--- Kinematics ---\n"
-            f"Reduction Ratio (Ring fixed): 1/{rollers_num} (Reverse)\n"
-            f"Reduction Ratio (Separator fixed): 1/{cav_num} (Forward)"
+            f"## Input Parameters\n"
+            f"* Roller Diameter: {roller_diameter:.2f} [mm]\n"
+            f"* Eccentricity: {ecc:.2f} [mm]\n"
+            f"* Rollers Number: {rollers_num} [ea]\n"
+            f"* Wave Gen Diameter: {wave_gen_d_display}\n"
+            f"* Input Shaft Diameter: {input_shaft_diameter:.2f} [mm]\n"
+            f"* Resolution: {resolution} [points]\n\n"
+            f"## Calculated Dimensions\n"
+            f"* Ring Gear Outer Diameter: {cy_r * 2:.2f} [mm]\n"
+            f"* Separator Inner Diameter: {sep_inner_radius * 2:.2f} [mm]\n"
+            f"* Separator Outer Diameter: {sep_outer_radius * 2:.2f} [mm]\n\n"
+            f"## Kinematics\n"
+            f"* Reduction Ratio (Ring fixed): -1/{rollers_num}\n"
+            f"* Reduction Ratio (Separator fixed): 1/{cav_num}"
         )
         self.output_text.config(state=tk.NORMAL)
         self.output_text.delete(1.0, tk.END)
